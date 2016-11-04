@@ -3,7 +3,6 @@ import moment from 'moment';
 import cx from 'classnames';
 import Portal from 'react-portal';
 import includes from 'array-includes';
-import TetherComponent from 'react-tether';
 
 import toMomentObject from '../utils/toMomentObject';
 import toLocalizedDateString from '../utils/toLocalizedDateString';
@@ -70,6 +69,7 @@ export default class SingleDatePicker extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
+      dayPickerContainerStyles: {},
       hoverDate: null,
     };
 
@@ -81,6 +81,19 @@ export default class SingleDatePicker extends React.Component {
     this.onFocus = this.onFocus.bind(this);
     this.onClearFocus = this.onClearFocus.bind(this);
     this.clearDate = this.clearDate.bind(this);
+
+    this.responsivizePickerPosition = this.responsivizePickerPosition.bind(this);
+  }
+
+  /* istanbul ignore next */
+  componentDidMount() {
+    window.addEventListener('resize', this.responsivizePickerPosition);
+    this.responsivizePickerPosition();
+  }
+
+  /* istanbul ignore next */
+  componentWillUnmount() {
+    window.removeEventListener('resize', this.responsivizePickerPosition);
   }
 
   onChange(dateString) {
@@ -138,10 +151,12 @@ export default class SingleDatePicker extends React.Component {
   }
 
   getDayPickerContainerClasses() {
-    const { orientation, withPortal, withFullScreenPortal, anchorDirection } = this.props;
+    const { orientation, withPortal, withFullScreenPortal, anchorDirection, focused } = this.props;
     const { hoverDate } = this.state;
 
     const dayPickerClassName = cx('SingleDatePicker__picker', {
+      'SingleDatePicker__picker--show': focused,
+      'SingleDatePicker__picker--invisible': !focused,
       'SingleDatePicker__picker--direction-left': anchorDirection === ANCHOR_LEFT,
       'SingleDatePicker__picker--direction-right': anchorDirection === ANCHOR_RIGHT,
       'SingleDatePicker__picker--horizontal': orientation === HORIZONTAL_ORIENTATION,
@@ -164,6 +179,34 @@ export default class SingleDatePicker extends React.Component {
     onDateChange(null);
     if (reopenPickerOnClearDate) {
       onFocusChange({ focused: true });
+    }
+  }
+
+  /* istanbul ignore next */
+  responsivizePickerPosition() {
+    const { anchorDirection } = this.props;
+    const { dayPickerContainerStyles } = this.state;
+
+    const containerClientRect = this.dayPickerContainer.getBoundingClientRect();
+    const documentBodyStyles = window.getComputedStyle(document.body);
+
+    if (anchorDirection === ANCHOR_LEFT) {
+      const documentBodyMarginRight = parseInt(documentBodyStyles.marginRight, 10);
+      const currentOffset = dayPickerContainerStyles.left || 0;
+      const calculatedOffset = window.innerWidth - containerClientRect.right;
+      this.setState({
+        dayPickerContainerStyles: {
+          left: Math.min(currentOffset + calculatedOffset - documentBodyMarginRight, 0),
+        },
+      });
+    } else if (anchorDirection === ANCHOR_RIGHT) {
+      const documentBodyMarginLeft = parseInt(documentBodyStyles.marginLeft, 10);
+      const currentOffset = dayPickerContainerStyles.right || 0;
+      this.setState({
+        dayPickerContainerStyles: {
+          right: Math.min(currentOffset + containerClientRect.left - documentBodyMarginLeft, 0),
+        },
+      });
     }
   }
 
@@ -211,6 +254,7 @@ export default class SingleDatePicker extends React.Component {
       focused,
       initialVisibleMonth,
     } = this.props;
+    const { dayPickerContainerStyles } = this.state;
 
     const modifiers = {
       blocked: day => this.isBlocked(day),
@@ -224,7 +268,11 @@ export default class SingleDatePicker extends React.Component {
     const onOutsideClick = !withFullScreenPortal ? this.onClearFocus : undefined;
 
     return (
-      <div className={this.getDayPickerContainerClasses()}>
+      <div
+        ref={ref => { this.dayPickerContainer = ref; }}
+        className={this.getDayPickerContainerClasses()}
+        style={dayPickerContainerStyles}
+      >
         <DayPicker
           orientation={orientation}
           enableOutsideDays={enableOutsideDays}
@@ -271,51 +319,33 @@ export default class SingleDatePicker extends React.Component {
       showClearDate,
       date,
       phrases,
-      anchorDirection,
       withPortal,
       withFullScreenPortal,
     } = this.props;
 
     const dateString = this.getDateString(date);
 
-    const tetherPinDirection = anchorDirection === ANCHOR_LEFT ? ANCHOR_RIGHT : ANCHOR_LEFT;
-
     return (
       <div className="SingleDatePicker">
-        <TetherComponent
-          attachment={`top ${anchorDirection}`}
-          targetAttachment={`bottom ${anchorDirection}`}
-          offset="-23px 0"
-          constraints={[{
-            to: 'scrollParent',
-            attachment: 'none',
-            pin: [tetherPinDirection],
-          }]}
-          className={cx({
-            'SingleDatePicker__tether--show': focused,
-            'SingleDatePicker__tether--invisible': !focused,
-          })}
-        >
-          <SingleDatePickerInput
-            id={id}
-            placeholder={placeholder}
-            focused={focused}
-            disabled={disabled}
-            required={required}
-            showCaret={!withPortal && !withFullScreenPortal}
-            phrases={phrases}
-            onClearDate={this.clearDate}
-            showClearDate={showClearDate}
-            dateValue={dateString}
-            onChange={this.onChange}
-            onFocus={this.onFocus}
-            onKeyDownShiftTab={this.onClearFocus}
-            onKeyDownTab={this.onClearFocus}
-            border
-          />
+        <SingleDatePickerInput
+          id={id}
+          placeholder={placeholder}
+          focused={focused}
+          disabled={disabled}
+          required={required}
+          showCaret={!withPortal && !withFullScreenPortal}
+          phrases={phrases}
+          onClearDate={this.clearDate}
+          showClearDate={showClearDate}
+          dateValue={dateString}
+          onChange={this.onChange}
+          onFocus={this.onFocus}
+          onKeyDownShiftTab={this.onClearFocus}
+          onKeyDownTab={this.onClearFocus}
+          border
+        />
 
-          {this.maybeRenderDayPickerWithPortal()}
-        </TetherComponent>
+        {this.maybeRenderDayPickerWithPortal()}
       </div>
     );
   }
